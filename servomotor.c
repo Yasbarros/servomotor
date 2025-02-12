@@ -3,60 +3,56 @@
 #include "hardware/clocks.h"
 #include <stdio.h>
 
-#define SERVO_CTRL_PIN 18  // Se desejar testar com LED RGB, altere para 11
+#define drive_pin 18
 
-const uint32_t PWM_PERIOD_VALUE = 62500;
-const float PWM_DIVISOR_VALUE = 40.0f;
+const uint32_t max_count_pwm = 62500;
+const float clk_div_pwm = 40.0f;
 
-// Protótipos das funções
-void servoPWMSetup(void);
-void servoPulseSet(float pulseFraction, uint32_t delayMs);
+// protótipos das funções
+void init_sinal_pwm(void);
+void ajusta_pulso(float fator, uint32_t atraso);
 
 int main(void) {
-    // Definindo os limites e incremento para a fração de pulso do servo
-    const float PULSE_MIN = 0.025f;    // Posição 0°
-    const float PULSE_MID = 0.0735f;   // Posição 90°
-    const float PULSE_MAX = 0.12f;     // Posição 180°
-    const float PULSE_INCREMENT = 0.00025f;
+    // valores que definem a posição do servo:
+    // inicio: posição 0°, meio: 90°, fim: 180°
+    const float inicio = 0.025f;
+    const float meio = 0.0735f;
+    const float fim = 0.12f;
+    const float delta = 0.00025f;
 
-    // Inicializa a comunicação e o stdio
     stdio_init_all();
+    init_sinal_pwm();
 
-    // Configura o PWM para controle do servo
-    servoPWMSetup();
+    ajusta_pulso(fim, 5000);   // aproximação de 180°
+    ajusta_pulso(meio, 5000);  // aproximação de 90°
+    ajusta_pulso(inicio, 5000);   // aproximação de 0°
 
-    // Movimenta o servo para posições específicas
-    servoPulseSet(PULSE_MAX, 5000);  // Aproximadamente 180°
-    servoPulseSet(PULSE_MID, 5000);  // Aproximadamente 90°
-    servoPulseSet(PULSE_MIN, 5000);  // Aproximadamente 0°
-
-    // Loop infinito para varredura suave do movimento do servo
+    // loop para varredura contínua do servo de 0° a 180° e retorno
     while (true) {
-        // Incremento de 0° até 180°
-        for (float currentPulse = PULSE_MIN; currentPulse <= PULSE_MAX; currentPulse += PULSE_INCREMENT) {
-            servoPulseSet(currentPulse, 10);
+        // aumenta gradualmente a posição do servo
+        for (float valor_atual = inicio; valor_atual <= fim; valor_atual += delta) {
+            ajusta_pulso(valor_atual, 10);
         }
-        // Decremento de 180° até 0°
-        for (float currentPulse = PULSE_MAX; currentPulse >= PULSE_MIN; currentPulse -= PULSE_INCREMENT) {
-            servoPulseSet(currentPulse, 10);
+        // diminui gradualmente a posição do servo
+        for (float valor_atual = fim; valor_atual >= inicio; valor_atual -= delta) {
+            ajusta_pulso(valor_atual, 10);
         }
     }
-
     return 0;
 }
 
-// Função para configurar o PWM no pino do servo
-void servoPWMSetup(void) {
-    gpio_set_function(SERVO_CTRL_PIN, GPIO_FUNC_PWM);              // Ativa a função PWM no pino
-    uint sliceIndex = pwm_gpio_to_slice_num(SERVO_CTRL_PIN);          // Obtém o slice PWM associado
-    pwm_set_clkdiv(sliceIndex, PWM_DIVISOR_VALUE);                    // Configura o divisor do clock do PWM
-    pwm_set_wrap(sliceIndex, PWM_PERIOD_VALUE);                       // Define o período do PWM
-    pwm_set_enabled(sliceIndex, true);                                // Habilita o PWM
+// configura o pino para funcionar com pwm
+void init_sinal_pwm(void) {
+    gpio_set_function(drive_pin, GPIO_FUNC_PWM);
+    uint slice = pwm_gpio_to_slice_num(drive_pin);
+    pwm_set_clkdiv(slice, clk_div_pwm);
+    pwm_set_wrap(slice, max_count_pwm);
+    pwm_set_enabled(slice, true);
 }
 
-// Função para atualizar o pulso (duty cycle) do PWM e aplicar um atraso
-void servoPulseSet(float pulseFraction, uint32_t delayMs) {
-    uint32_t pwmLevel = (uint32_t)(PWM_PERIOD_VALUE * pulseFraction);
-    pwm_set_gpio_level(SERVO_CTRL_PIN, pwmLevel);
-    sleep_ms(delayMs);
+// ajusta o pulso do pwm com base no fator e espera o atraso especificado
+void ajusta_pulso(float fator, uint32_t atraso) {
+    uint32_t nivel = (uint32_t)(max_count_pwm * fator);
+    pwm_set_gpio_level(drive_pin, nivel);
+    sleep_ms(atraso);
 }
